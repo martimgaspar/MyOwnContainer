@@ -5,13 +5,15 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"syscall"
 )
+
+var cgroups = "/sys/fs/cgroup"
+var custom_cgroup = filepath.Join(cgroups, "liz")
 
 // docker           run image <cmd> <params>
 // go run main.go   run       <cmd> <params>
@@ -63,13 +65,24 @@ func child() {
 }
 
 func cg() { // Control group to limit processes container can use
-	cgroups := "/sys/fs/cgroup/"
-	pids := filepath.Join(cgroups, "pids")
-	os.Mkdir(filepath.Join(pids, "liz"), 0755)
-	must(ioutil.WriteFile(filepath.Join(pids, "liz/pids.max"), []byte("20"), 0700))
-	// Removes the new cgroup in place after the container exits
-	must(ioutil.WriteFile(filepath.Join(pids, "liz/notify_on_release"), []byte("1"), 0700))
-	must(ioutil.WriteFile(filepath.Join(pids, "liz/cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0700))
+	os.Mkdir(custom_cgroup, 0755)
+
+	must(os.WriteFile(filepath.Join(custom_cgroup, "pids.max"), []byte("20"), 0644))
+	must(os.WriteFile(filepath.Join(custom_cgroup, "cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0644))
+}
+
+func cgCleanup() error {
+	alive, err := os.ReadFile(filepath.Join(custom_cgroup, "pids.current"))
+	if err != nil { // or must(err).. but then it'll look weird..
+		panic(err)
+	}
+
+	if alive[0] != uint8(48) {
+		must(os.WriteFile(filepath.Join(custom_cgroup, "cgroup.kill"), []byte("1"), 0644))
+	}
+	must(os.Remove(custom_cgroup))
+
+	return nil
 }
 
 func must(err error) {

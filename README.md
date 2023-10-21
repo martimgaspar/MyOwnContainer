@@ -4,4 +4,3 @@ Created my own container (like docker) using Go! - Originally followed Liz Rice'
 ## Next Steps:
 - Adding rootless functionality
 - Containing a program using my container
-
